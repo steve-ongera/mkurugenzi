@@ -1,0 +1,204 @@
+{% extends 'ecommerce/base.html' %}
+
+{% block title %}{{ product.name }} - E-commerce Store{% endblock %}
+
+{% block content %}
+<div>
+    <h1>{{ product.name }}</h1>
+    
+    <!-- Product Images -->
+    {% if images %}
+        <div>
+            {% for image in images %}
+                <img src="{{ image.image.url }}" alt="{{ product.name }}">
+            {% endfor %}
+        </div>
+    {% endif %}
+    
+    <!-- Product Info -->
+    <div>
+        <h2>Product Details</h2>
+        <p><strong>Brand:</strong> {{ product.brand.name }}</p>
+        <p><strong>Category:</strong> {{ product.category.name }}</p>
+        <p><strong>Price:</strong> ${{ product.price }}</p>
+        {% if product.sale_price %}
+            <p><strong>Sale Price:</strong> ${{ product.sale_price }}</p>
+        {% endif %}
+        <p><strong>SKU:</strong> {{ product.sku }}</p>
+        <p><strong>Description:</strong></p>
+        <p>{{ product.description }}</p>
+        
+        <!-- Product Variants -->
+        {% if variants_by_color %}
+            <form id="add-to-cart-form">
+                {% csrf_token %}
+                <div>
+                    <label>Color:</label>
+                    <select name="color" id="color-select" required>
+                        <option value="">Select Color</option>
+                        {% for color_name, color_data in variants_by_color.items %}
+                            <option value="{{ color_data.color.id }}">{{ color_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div>
+                    <label>Size:</label>
+                    <select name="size" id="size-select" required>
+                        <option value="">Select Size</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label>Quantity:</label>
+                    <input type="number" name="quantity" value="1" min="1" id="quantity-input">
+                </div>
+                
+                <div id="variant-info">
+                    <p id="price-display"></p>
+                    <p id="stock-display"></p>
+                    <p id="sku-display"></p>
+                </div>
+                
+                <input type="hidden" name="variant_id" id="variant-id">
+                <button type="submit" id="add-to-cart-btn" disabled>Add to Cart</button>
+            </form>
+        {% endif %}
+    </div>
+    
+    <!-- Reviews Section -->
+    <div>
+        <h2>Customer Reviews</h2>
+        <div>
+            <p><strong>Average Rating:</strong> {{ avg_rating }}/5</p>
+            <div>
+                {% for rating, count in rating_counts.items %}
+                    <p>{{ rating }} stars: {{ count }} reviews</p>
+                {% endfor %}
+            </div>
+        </div>
+        
+        {% if reviews %}
+            <div>
+                {% for review in reviews %}
+                    <div>
+                        <h4>{{ review.customer.user.get_full_name|default:review.customer.user.username }}</h4>
+                        <p>Rating: {{ review.rating }}/5</p>
+                        <p>{{ review.comment }}</p>
+                        <p><small>{{ review.created_at }}</small></p>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>No reviews yet.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Related Products -->
+    {% if related_products %}
+        <div>
+            <h2>Related Products</h2>
+            <div>
+                {% for related_product in related_products %}
+                    <div>
+                        <h3><a href="{% url 'ecommerce:product_detail' related_product.slug %}">{{ related_product.name }}</a></h3>
+                        <p>Price: ${{ related_product.price }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const colorSelect = document.getElementById('color-select');
+    const sizeSelect = document.getElementById('size-select');
+    const variantIdInput = document.getElementById('variant-id');
+    const addToCartBtn = document.getElementById('add-to-cart-btn');
+    const addToCartForm = document.getElementById('add-to-cart-form');
+    const priceDisplay = document.getElementById('price-display');
+    const stockDisplay = document.getElementById('stock-display');
+    const skuDisplay = document.getElementById('sku-display');
+    const quantityInput = document.getElementById('quantity-input');
+    
+    const variants = {{ variants_by_color|safe }};
+    
+    colorSelect.addEventListener('change', function() {
+        const colorId = this.value;
+        sizeSelect.innerHTML = '<option value="">Select Size</option>';
+        
+        if (colorId) {
+            // Find variants for selected color
+            for (const [colorName, colorData] of Object.entries(variants)) {
+                if (colorData.color.id == colorId) {
+                    colorData.sizes.forEach(sizeData => {
+                        const option = document.createElement('option');
+                        option.value = sizeData.size.id;
+                        option.textContent = sizeData.size.name;
+                        option.disabled = !sizeData.in_stock;
+                        sizeSelect.appendChild(option);
+                    });
+                    break;
+                }
+            }
+        }
+        
+        updateVariantInfo();
+    });
+    
+    sizeSelect.addEventListener('change', updateVariantInfo);
+    
+    function updateVariantInfo() {
+        const colorId = colorSelect.value;
+        const sizeId = sizeSelect.value;
+        
+        if (colorId && sizeId) {
+            fetch(`/get-variant-info/?color_id=${colorId}&size_id=${sizeId}&product_id={{ product.id }}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        variantIdInput.value = data.variant_id;
+                        priceDisplay.textContent = `Price: $${data.price}`;
+                        stockDisplay.textContent = `Stock: ${data.stock}`;
+                        skuDisplay.textContent = `SKU: ${data.sku}`;
+                        addToCartBtn.disabled = !data.in_stock;
+                        quantityInput.max = data.stock;
+                    }
+                });
+        } else {
+            variantIdInput.value = '';
+            priceDisplay.textContent = '';
+            stockDisplay.textContent = '';
+            skuDisplay.textContent = '';
+            addToCartBtn.disabled = true;
+        }
+    }
+    
+    addToCartForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        
+        fetch('{% url "ecommerce:add_to_cart" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            if (data.success) {
+                // Update cart count if needed
+                const cartLink = document.querySelector('a[href="{% url "ecommerce:cart" %}"]');
+                if (cartLink && data.cart_count) {
+                    cartLink.textContent = `Cart (${data.cart_count})`;
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

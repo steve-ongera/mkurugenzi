@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}E-commerce Store{% endblock %}</title>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="{% url 'ecommerce:index' %}">Home</a>
+            <form method="GET" action="{% url 'ecommerce:index' %}">
+                <input type="text" name="search" placeholder="Search products..." value="{{ search_query }}">
+                <button type="submit">Search</button>
+            </form>
+            {% if user.is_authenticated %}
+                <a href="{% url 'ecommerce:cart' %}">Cart</a>
+                <span>Welcome, {{ user.username }}</span>
+                <a href="{% url 'admin:logout' %}">Logout</a>
+            {% else %}
+                <a href="{% url 'admin:login' %}">Login</a>
+            {% endif %}
+        </nav>
+    </header>
+
+    <main>
+        {% if messages %}
+            <div>
+                {% for message in messages %}
+                    <div>{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; 2024 E-commerce Store. All rights reserved.</p>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,134 @@
+{% extends 'ecommerce/base.html' %}
+
+{% block title %}Home - E-commerce Store{% endblock %}
+
+{% block content %}
+<h1>Welcome to Our Store</h1>
+
+<!-- Search and Filter Section -->
+<div>
+    <h2>Search & Filter</h2>
+    <form method="GET">
+        <input type="text" name="search" placeholder="Search products..." value="{{ search_query }}">
+        
+        <select name="category">
+            <option value="">All Categories</option>
+            {% for category in categories %}
+                <option value="{{ category.slug }}" {% if category_filter == category.slug %}selected{% endif %}>
+                    {{ category.name }} ({{ category.product_count }})
+                </option>
+            {% endfor %}
+        </select>
+        
+        <select name="brand">
+            <option value="">All Brands</option>
+            {% for brand in brands %}
+                <option value="{{ brand.slug }}" {% if brand_filter == brand.slug %}selected{% endif %}>
+                    {{ brand.name }} ({{ brand.product_count }})
+                </option>
+            {% endfor %}
+        </select>
+        
+        <button type="submit">Filter</button>
+    </form>
+</div>
+
+<!-- Search Results -->
+{% if is_search %}
+    <div>
+        <h2>Search Results</h2>
+        {% if page_products %}
+            <div>
+                {% for product in page_products %}
+                    <div>
+                        <h3><a href="{% url 'ecommerce:product_detail' product.slug %}">{{ product.name }}</a></h3>
+                        <p>Brand: {{ product.brand.name }}</p>
+                        <p>Category: {{ product.category.name }}</p>
+                        <p>Price: ${{ product.price }}</p>
+                        <p>{{ product.description|truncatewords:20 }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Pagination -->
+            {% if page_products.has_other_pages %}
+                <div>
+                    {% if page_products.has_previous %}
+                        <a href="?page=1&search={{ search_query }}&category={{ category_filter }}&brand={{ brand_filter }}">First</a>
+                        <a href="?page={{ page_products.previous_page_number }}&search={{ search_query }}&category={{ category_filter }}&brand={{ brand_filter }}">Previous</a>
+                    {% endif %}
+                    
+                    <span>Page {{ page_products.number }} of {{ page_products.paginator.num_pages }}</span>
+                    
+                    {% if page_products.has_next %}
+                        <a href="?page={{ page_products.next_page_number }}&search={{ search_query }}&category={{ category_filter }}&brand={{ brand_filter }}">Next</a>
+                        <a href="?page={{ page_products.paginator.num_pages }}&search={{ search_query }}&category={{ category_filter }}&brand={{ brand_filter }}">Last</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        {% else %}
+            <p>No products found.</p>
+        {% endif %}
+    </div>
+{% else %}
+    <!-- Featured Products -->
+    {% if featured_products %}
+        <div>
+            <h2>Featured Products</h2>
+            <div>
+                {% for product in featured_products %}
+                    <div>
+                        <h3><a href="{% url 'ecommerce:product_detail' product.slug %}">{{ product.name }}</a></h3>
+                        <p>Brand: {{ product.brand.name }}</p>
+                        <p>Price: ${{ product.price }}</p>
+                        <p>{{ product.description|truncatewords:15 }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Latest Products -->
+    {% if latest_products %}
+        <div>
+            <h2>Latest Products</h2>
+            <div>
+                {% for product in latest_products %}
+                    <div>
+                        <h3><a href="{% url 'ecommerce:product_detail' product.slug %}">{{ product.name }}</a></h3>
+                        <p>Brand: {{ product.brand.name }}</p>
+                        <p>Price: ${{ product.price }}</p>
+                        <p>{{ product.description|truncatewords:15 }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Categories -->
+    <div>
+        <h2>Shop by Category</h2>
+        <div>
+            {% for category in categories %}
+                <div>
+                    <h3><a href="?category={{ category.slug }}">{{ category.name }}</a></h3>
+                    <p>{{ category.product_count }} products</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Brands -->
+    <div>
+        <h2>Shop by Brand</h2>
+        <div>
+            {% for brand in brands %}
+                <div>
+                    <h3><a href="?brand={{ brand.slug }}">{{ brand.name }}</a></h3>
+                    <p>{{ brand.product_count }} products</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

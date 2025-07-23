@@ -1,0 +1,184 @@
+{% extends 'ecommerce/base.html' %}
+
+{% block title %}Checkout - E-commerce Store{% endblock %}
+
+{% block content %}
+<h1>Checkout</h1>
+
+<form method="POST">
+    {% csrf_token %}
+    
+    <!-- Order Summary -->
+    <div>
+        <h2>Order Summary</h2>
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Color</th>
+                    <th>Size</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in cart_items %}
+                    <tr>
+                        <td>{{ item.product_variant.product.name }}</td>
+                        <td>{{ item.product_variant.color.name }}</td>
+                        <td>{{ item.product_variant.size.name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>${{ item.product_variant.final_price }}</td>
+                        <td>${{ item.total_price }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <div>
+            <p>Subtotal: ${{ subtotal }}</p>
+            <p>Tax: ${{ tax_amount }}</p>
+            <p>Shipping: ${{ shipping_cost }}</p>
+            <p><strong>Total: $<span id="final-total">{{ total }}</span></strong></p>
+        </div>
+    </div>
+    
+    <!-- Billing Address -->
+    <div>
+        <h2>Billing Address</h2>
+        {% if addresses %}
+            <select name="billing_address" required>
+                <option value="">Select Billing Address</option>
+                {% for address in addresses %}
+                    <option value="{{ address.id }}">
+                        {{ address.first_name }} {{ address.last_name }}, 
+                        {{ address.address_line_1 }}{% if address.address_line_2 %}, {{ address.address_line_2 }}{% endif %}, 
+                        {{ address.city }}, {{ address.state }} {{ address.postal_code }}
+                    </option>
+                {% endfor %}
+            </select>
+        {% else %}
+            <p>No addresses found. Please add an address in your profile.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Shipping Address -->
+    <div>
+        <h2>Shipping Address</h2>
+        {% if addresses %}
+            <select name="shipping_address" required>
+                <option value="">Select Shipping Address</option>
+                {% for address in addresses %}
+                    <option value="{{ address.id }}">
+                        {{ address.first_name }} {{ address.last_name }}, 
+                        {{ address.address_line_1 }}{% if address.address_line_2 %}, {{ address.address_line_2 }}{% endif %}, 
+                        {{ address.city }}, {{ address.state }} {{ address.postal_code }}
+                    </option>
+                {% endfor %}
+            </select>
+        {% else %}
+            <p>No addresses found. Please add an address in your profile.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Coupon Code -->
+    <div>
+        <h2>Coupon Code</h2>
+        <div>
+            <input type="text" name="coupon_code" id="coupon-code" placeholder="Enter coupon code">
+            <button type="button" id="apply-coupon-btn">Apply Coupon</button>
+        </div>
+        <div id="coupon-message"></div>
+        <div id="discount-info"></div>
+    </div>
+    
+    <!-- Payment Method -->
+    <div>
+        <h2>Payment Method</h2>
+        <div>
+            <input type="radio" id="credit-card" name="payment_method" value="credit_card" checked>
+            <label for="credit-card">Credit Card</label>
+        </div>
+        <div>
+            <input type="radio" id="paypal" name="payment_method" value="paypal">
+            <label for="paypal">PayPal</label>
+        </div>
+        <div>
+            <input type="radio" id="cash-on-delivery" name="payment_method" value="cod">
+            <label for="cash-on-delivery">Cash on Delivery</label>
+        </div>
+    </div>
+    
+    <!-- Place Order -->
+    <div>
+        <button type="submit">Place Order</button>
+        <a href="{% url 'ecommerce:cart' %}">Back to Cart</a>
+    </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const applyCouponBtn = document.getElementById('apply-coupon-btn');
+    const couponCodeInput = document.getElementById('coupon-code');
+    const couponMessage = document.getElementById('coupon-message');
+    const discountInfo = document.getElementById('discount-info');
+    const finalTotal = document.getElementById('final-total');
+    
+    let originalTotal = {{ total }};
+    let currentDiscount = 0;
+    
+    applyCouponBtn.addEventListener('click', function() {
+        const couponCode = couponCodeInput.value.trim();
+        
+        if (!couponCode) {
+            couponMessage.textContent = 'Please enter a coupon code';
+            couponMessage.style.color = 'red';
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('coupon_code', couponCode);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        
+        fetch('{% url "ecommerce:apply_coupon" %}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                couponMessage.textContent = data.message;
+                couponMessage.style.color = 'green';
+                
+                currentDiscount = parseFloat(data.discount_amount);
+                const newTotal = originalTotal - currentDiscount;
+                
+                discountInfo.innerHTML = `
+                    <p>Discount Applied: -$${currentDiscount.toFixed(2)}</p>
+                    <p>${data.coupon_description}</p>
+                `;
+                
+                finalTotal.textContent = newTotal.toFixed(2);
+                
+                // Disable the apply button and input
+                applyCouponBtn.disabled = true;
+                couponCodeInput.disabled = true;
+            } else {
+                couponMessage.textContent = data.message;
+                couponMessage.style.color = 'red';
+                
+                // Reset discount info
+                discountInfo.innerHTML = '';
+                finalTotal.textContent = originalTotal.toFixed(2);
+                currentDiscount = 0;
+            }
+        })
+        .catch(error => {
+            couponMessage.textContent = 'An error occurred while applying the coupon';
+            couponMessage.style.color = 'red';
+        });
+    });
+});
+</script>
+{% endblock %}
