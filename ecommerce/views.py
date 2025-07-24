@@ -77,7 +77,7 @@ def index(request):
         'is_search': bool(search_query or category_filter or brand_filter),
     }
     
-    return render(request, 'ecommerce/index.html', context)
+    return render(request, 'index.html', context)
 
 
 def product_detail(request, slug):
@@ -128,7 +128,8 @@ def product_detail(request, slug):
         'related_products': related_products,
     }
     
-    return render(request, 'ecommerce/product.html', context)
+    return render(request, 'product.html', context)
+
 
 
 @login_required
@@ -211,7 +212,7 @@ def cart_view(request):
         'total': total,
     }
     
-    return render(request, 'ecommerce/cart.html', context)
+    return render(request, 'cart.html', context)
 
 
 @login_required
@@ -405,7 +406,7 @@ def checkout(request):
         'total': total,
     }
     
-    return render(request, 'ecommerce/checkout.html', context)
+    return render(request, 'checkout.html', context)
 
 
 @login_required
@@ -417,7 +418,7 @@ def order_success(request, order_number):
         'order': order,
     }
     
-    return render(request, 'ecommerce/order_success.html', context)
+    return render(request, 'order_success.html', context)
 
 
 @login_required

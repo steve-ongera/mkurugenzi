@@ -1,4 +1,4 @@
-{% extends 'ecommerce/base.html' %}
+{% extends 'base.html' %}
 
 {% block title %}{{ product.name }} - E-commerce Store{% endblock %}
 
@@ -101,7 +101,7 @@
             <div>
                 {% for related_product in related_products %}
                     <div>
-                        <h3><a href="{% url 'ecommerce:product_detail' related_product.slug %}">{{ related_product.name }}</a></h3>
+                        <h3><a href="{% url 'product_detail' related_product.slug %}">{{ related_product.name }}</a></h3>
                         <p>Price: ${{ related_product.price }}</p>
                     </div>
                 {% endfor %}
@@ -180,7 +180,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const formData = new FormData(this);
         
-        fetch('{% url "ecommerce:add_to_cart" %}', {
+        fetch('{% url "add_to_cart" %}', {
             method: 'POST',
             body: formData,
             headers: {
@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
             alert(data.message);
             if (data.success) {
                 // Update cart count if needed
-                const cartLink = document.querySelector('a[href="{% url "ecommerce:cart" %}"]');
+                const cartLink = document.querySelector('a[href="{% url "cart" %}"]');
                 if (cartLink && data.cart_count) {
                     cartLink.textContent = `Cart (${data.cart_count})`;
                 }
