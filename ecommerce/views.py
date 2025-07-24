@@ -14,6 +14,22 @@ from .models import (
 )
 
 
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.http import JsonResponse
+from django.db.models import Q, Avg, Count, Prefetch
+from django.core.paginator import Paginator
+from django.views.decorators.http import require_POST
+from decimal import Decimal
+import json
+
+from .models import (
+    Product, Category, Brand, ProductVariant, ProductImage,
+    Customer, Color, Size
+)
+
+
 def index(request):
     """Homepage with featured products, categories, and search"""
     # Get search query
@@ -21,8 +37,12 @@ def index(request):
     category_filter = request.GET.get('category', '')
     brand_filter = request.GET.get('brand', '')
     
-    # Base queryset for products
-    products = Product.objects.filter(is_active=True).select_related('brand', 'category')
+    # Base queryset for products with optimized queries
+    products = Product.objects.filter(is_active=True).select_related(
+        'brand', 'category'
+    ).prefetch_related(
+        Prefetch('images', queryset=ProductImage.objects.filter(is_primary=True))
+    )
     
     # Apply search filter
     if search_query:
@@ -47,6 +67,26 @@ def index(request):
     # Get latest products
     latest_products = products.order_by('-created_at')[:12]
     
+    # Add image and price properties to products for template compatibility
+    def add_template_properties(product_list):
+        for product in product_list:
+            # Get primary image or first image
+            primary_images = [img for img in product.images.all() if img.is_primary]
+            if primary_images:
+                product.image = primary_images[0]
+            elif product.images.all():
+                product.image = product.images.all()[0]
+            else:
+                product.image = None
+            
+            # Add price property for template compatibility
+            product.price = product.current_price
+        return product_list
+    
+    # Apply template properties
+    featured_products = add_template_properties(list(featured_products))
+    latest_products = add_template_properties(list(latest_products))
+    
     # Get categories with product count
     categories = Category.objects.filter(is_active=True).annotate(
         product_count=Count('products', filter=Q(products__is_active=True))
@@ -62,6 +102,8 @@ def index(request):
         paginator = Paginator(products, 12)
         page_number = request.GET.get('page')
         page_products = paginator.get_page(page_number)
+        # Apply template properties to paginated products
+        page_products.object_list = add_template_properties(list(page_products.object_list))
     else:
         page_products = None
     
@@ -79,6 +121,140 @@ def index(request):
     
     return render(request, 'index.html', context)
 
+
+def product_detail(request, slug):
+    """Product detail view"""
+    product = get_object_or_404(
+        Product.objects.select_related('brand', 'category', 'subcategory')
+        .prefetch_related('images', 'variants__color', 'variants__size'),
+        slug=slug,
+        is_active=True
+    )
+    
+    # Get all variants for this product
+    variants = product.variants.filter(is_active=True).select_related('color', 'size')
+    
+    # Get available colors and sizes
+    available_colors = Color.objects.filter(
+        id__in=variants.values_list('color_id', flat=True)
+    ).distinct()
+    
+    available_sizes = Size.objects.filter(
+        id__in=variants.values_list('size_id', flat=True)
+    ).distinct()
+    
+    # Get related products
+    related_products = Product.objects.filter(
+        category=product.category,
+        is_active=True
+    ).exclude(id=product.id).prefetch_related(
+        Prefetch('images', queryset=ProductImage.objects.filter(is_primary=True))
+    )[:4]
+    
+    # Add template properties to related products
+    for related_product in related_products:
+        primary_images = [img for img in related_product.images.all() if img.is_primary]
+        if primary_images:
+            related_product.image = primary_images[0]
+        elif related_product.images.all():
+            related_product.image = related_product.images.all()[0]
+        else:
+            related_product.image = None
+        related_product.price = related_product.current_price
+    
+    context = {
+        'product': product,
+        'variants': variants,
+        'available_colors': available_colors,
+        'available_sizes': available_sizes,
+        'related_products': related_products,
+    }
+    
+    return render(request, 'product_detail.html', context)
+
+
+def category_products(request, category_slug=None):
+    """Category products listing"""
+    category = None
+    if category_slug:
+        category = get_object_or_404(Category, slug=category_slug, is_active=True)
+    
+    # Get products
+    products = Product.objects.filter(is_active=True).select_related(
+        'brand', 'category'
+    ).prefetch_related(
+        Prefetch('images', queryset=ProductImage.objects.filter(is_primary=True))
+    )
+    
+    if category:
+        products = products.filter(category=category)
+    
+    # Get filter parameters
+    brand_filter = request.GET.get('brand', '')
+    min_price = request.GET.get('min_price', '')
+    max_price = request.GET.get('max_price', '')
+    sort_by = request.GET.get('sort', 'name')
+    
+    # Apply filters
+    if brand_filter:
+        products = products.filter(brand__slug=brand_filter)
+    
+    if min_price:
+        try:
+            min_price = Decimal(min_price)
+            products = products.filter(base_price__gte=min_price)
+        except:
+            pass
+    
+    if max_price:
+        try:
+            max_price = Decimal(max_price)
+            products = products.filter(base_price__lte=max_price)
+        except:
+            pass
+    
+    # Apply sorting
+    if sort_by == 'price_low':
+        products = products.order_by('base_price')
+    elif sort_by == 'price_high':
+        products = products.order_by('-base_price')
+    elif sort_by == 'newest':
+        products = products.order_by('-created_at')
+    elif sort_by == 'name':
+        products = products.order_by('name')
+    
+    # Pagination
+    paginator = Paginator(products, 12)
+    page_number = request.GET.get('page')
+    page_products = paginator.get_page(page_number)
+    
+    # Add template properties
+    for product in page_products.object_list:
+        primary_images = [img for img in product.images.all() if img.is_primary]
+        if primary_images:
+            product.image = primary_images[0]
+        elif product.images.all():
+            product.image = product.images.all()[0]
+        else:
+            product.image = None
+        product.price = product.current_price
+    
+    # Get available brands for filtering
+    available_brands = Brand.objects.filter(
+        products__category=category if category else None,
+        products__is_active=True,
+        is_active=True
+    ).distinct()
+    
+    context = {
+        'category': category,
+        'products': page_products,
+        'available_brands': available_brands,
+        'current_brand': brand_filter,
+        'current_sort': sort_by,
+    }
+    
+    return render(request, 'category_products.html', context)
 
 def product_detail(request, slug):
     """Product detail page with variants and reviews"""
